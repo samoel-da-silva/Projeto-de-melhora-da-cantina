@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cantina Escolar</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --verde: #2d7a4f; --verde-claro: #e8f5ee; --laranja: #e07b2a; --laranja-claro: #fff3e8;
+  --vermelho: #c0392b; --vermelho-claro: #fdecea; --cinza-fundo: #f4f3ef;
+  --cinza-borda: #dedad2; --cinza-texto: #6b6860; --preto: #1a1917; --branco: #ffffff;
+  --radius: 12px; --radius-sm: 8px;
+}
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--cinza-fundo); color: var(--preto); min-height: 100vh; }
+nav { background: var(--verde); padding: 0 1.5rem; display: flex; align-items: center; justify-content: space-between; height: 56px; position: sticky; top: 0; z-index: 100; }
+nav .logo { font-weight: 700; font-size: 1.05rem; color: #fff; }
+nav .logo span { opacity: 0.6; font-weight: 400; }
+.nav-tabs { display: flex; gap: 4px; }
+.nav-tab { padding: 6px 14px; border-radius: 20px; border: none; background: transparent; color: rgba(255,255,255,0.7); font-size: 0.88rem; cursor: pointer; transition: background 0.15s, color 0.15s; font-family: inherit; }
+.nav-tab.active { background: rgba(255,255,255,0.18); color: #fff; font-weight: 600; }
+.nav-tab:hover:not(.active) { background: rgba(255,255,255,0.08); color: #fff; }
+.page { display: none; padding: 1.25rem; max-width: 680px; margin: 0 auto; }
+.page.active { display: block; }
+.card { background: var(--branco); border-radius: var(--radius); border: 1px solid var(--cinza-borda); padding: 1.25rem 1.5rem; margin-bottom: 1rem; }
+.secao-titulo { font-size: 0.68rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--cinza-texto); margin: 1.25rem 0 0.5rem; }
+.secao-titulo:first-child { margin-top: 0; }
+label { display: block; font-size: 0.82rem; font-weight: 600; color: var(--cinza-texto); margin-bottom: 5px; }
+input[type="text"], select { width: 100%; padding: 10px 12px; border: 1.5px solid var(--cinza-borda); border-radius: var(--radius-sm); font-size: 0.95rem; font-family: inherit; color: var(--preto); background: var(--branco); transition: border-color 0.15s; outline: none; }
+input:focus, select:focus { border-color: var(--verde); }
+input::placeholder { color: #bbb; }
+.form-group { margin-bottom: 0.85rem; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 11px 20px; border-radius: var(--radius-sm); border: none; font-size: 0.93rem; font-weight: 600; font-family: inherit; cursor: pointer; transition: opacity 0.15s, transform 0.1s; }
+.btn:active { transform: scale(0.97); }
+.btn-verde { background: var(--verde); color: #fff; width: 100%; }
+.btn-verde:hover { opacity: 0.88; }
+.btn-verde:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-laranja { background: var(--laranja); color: #fff; }
+.btn-laranja:hover { opacity: 0.88; }
+.btn-outline { background: transparent; color: var(--vermelho); border: 1.5px solid var(--vermelho); }
+.btn-outline:hover { background: var(--vermelho-claro); }
+.btn-sm { padding: 6px 14px; font-size: 0.82rem; }
+.pill-status { display: inline-flex; align-items: center; gap: 5px; font-size: 0.8rem; font-weight: 600; padding: 4px 10px; border-radius: 20px; }
+.pill-aberto { background: var(--verde-claro); color: var(--verde); }
+.pill-encerrado { background: var(--vermelho-claro); color: var(--vermelho); }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; display: inline-block; }
+.item-cardapio { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--cinza-borda); }
+.item-cardapio:last-child { border-bottom: none; }
+.checkbox-wrap { display: flex; align-items: center; gap: 10px; cursor: pointer; width: 100%; user-select: none; }
+.checkbox-wrap input[type="checkbox"] { display: none; }
+.checkbox-box { width: 22px; height: 22px; border-radius: 6px; border: 2px solid var(--cinza-borda); background: var(--branco); flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+.checkbox-wrap input:checked + .checkbox-box { background: var(--verde); border-color: var(--verde); }
+.checkbox-wrap input:checked + .checkbox-box::after { content: 'V'; color: #fff; font-size: 12px; font-weight: 900; }
+.item-nome { font-size: 0.95rem; font-weight: 500; flex: 1; }
+.cant-item-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--cinza-borda); }
+.cant-item-row:last-child { border-bottom: none; }
+.cant-item-nome { flex: 1; font-size: 0.9rem; font-weight: 500; }
+.cant-item-qtd { font-size: 0.8rem; color: var(--verde); font-weight: 700; min-width: 64px; text-align: right; }
+.btn-del { background: none; border: none; cursor: pointer; color: var(--cinza-texto); font-size: 1rem; padding: 4px 8px; border-radius: 6px; }
+.btn-del:hover { background: var(--vermelho-claro); color: var(--vermelho); }
+.add-item-row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+.add-item-row .form-group { margin-bottom: 0; flex: 1; min-width: 130px; }
+.confirmacao { text-align: center; padding: 1.5rem 1rem; }
+.confirmacao-icon { width: 60px; height: 60px; background: var(--verde-claro); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem; font-size: 1.6rem; }
+.numero-senha { font-size: 3rem; font-weight: 800; color: var(--verde); letter-spacing: -1px; line-height: 1; margin: 0.4rem 0; }
+.senha-label { font-size: 0.8rem; color: var(--cinza-texto); margin-bottom: 1rem; }
+.resumo-pedido { background: var(--cinza-fundo); border-radius: var(--radius-sm); padding: 0.75rem 1rem; text-align: left; }
+.resumo-pedido ul { list-style: none; padding: 0; }
+.resumo-pedido li { font-size: 0.85rem; padding: 2px 0; color: var(--cinza-texto); }
+.resumo-pedido li::before { content: 'v '; color: var(--verde); font-weight: 700; }
+.stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 1rem; }
+.stat-card { background: var(--branco); border: 1px solid var(--cinza-borda); border-radius: var(--radius-sm); padding: 0.85rem 1rem; text-align: center; }
+.stat-num { font-size: 1.6rem; font-weight: 800; color: var(--verde); line-height: 1; }
+.stat-num.laranja { color: var(--laranja); }
+.stat-num.cinza { color: var(--cinza-texto); }
+.stat-label { font-size: 0.68rem; color: var(--cinza-texto); margin-top: 3px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+.chamada-box { background: var(--verde); border-radius: var(--radius); padding: 1.25rem 1.5rem; color: #fff; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.chamada-senha { font-size: 2.5rem; font-weight: 900; letter-spacing: -1px; line-height: 1; }
+.chamada-label { font-size: 0.75rem; opacity: 0.75; margin-bottom: 2px; }
+.chamada-nome { font-size: 0.95rem; font-weight: 600; }
+.chamada-itens { font-size: 0.78rem; opacity: 0.8; margin-top: 3px; }
+.chamada-vazia { background: var(--cinza-fundo); color: var(--cinza-texto); text-align: center; font-size: 0.88rem; }
+.pedido-item { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--cinza-borda); }
+.pedido-item:last-child { border-bottom: none; }
+.pedido-senha { background: var(--verde-claro); color: var(--verde); font-weight: 800; font-size: 1.1rem; width: 48px; height: 48px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.pedido-senha.entregue { background: var(--cinza-fundo); color: var(--cinza-borda); }
+.pedido-info { flex: 1; min-width: 0; }
+.pedido-nome { font-weight: 600; font-size: 0.92rem; }
+.pedido-turma { font-size: 0.78rem; color: var(--cinza-texto); }
+.pedido-itens { font-size: 0.78rem; color: var(--cinza-texto); margin-top: 3px; line-height: 1.4; }
+.pedido-hora { font-size: 0.72rem; color: var(--cinza-borda); margin-top: 2px; }
+.contagem-item { display: flex; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--cinza-borda); gap: 10px; }
+.contagem-item:last-child { border-bottom: none; }
+.contagem-nome { font-size: 0.88rem; font-weight: 500; min-width: 100px; }
+.contagem-num { font-size: 1.1rem; font-weight: 800; color: var(--verde); min-width: 28px; text-align: right; }
+.barra-wrap { flex: 1; height: 6px; background: var(--cinza-borda); border-radius: 3px; overflow: hidden; }
+.barra-fill { height: 100%; background: var(--verde); border-radius: 3px; transition: width 0.3s; }
+.filtro-row { display: flex; gap: 6px; margin-bottom: 0.75rem; flex-wrap: wrap; }
+.chip { padding: 5px 12px; border-radius: 20px; border: 1.5px solid var(--cinza-borda); background: var(--branco); font-size: 0.8rem; cursor: pointer; font-family: inherit; color: var(--cinza-texto); transition: all 0.12s; }
+.chip.active { background: var(--verde-claro); border-color: var(--verde); color: var(--verde); font-weight: 600; }
+.toggle { width: 44px; height: 24px; background: var(--cinza-borda); border-radius: 12px; border: none; cursor: pointer; position: relative; transition: background 0.2s; flex-shrink: 0; }
+.toggle.on { background: var(--verde); }
+.toggle::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; background: #fff; border-radius: 50%; transition: left 0.2s; }
+.toggle.on::after { left: 23px; }
+.aviso { background: var(--laranja-claro); border: 1px solid #f0c090; border-radius: var(--radius-sm); padding: 10px 14px; font-size: 0.83rem; color: #7a4510; margin-bottom: 1rem; }
+.lista-vazia { text-align: center; padding: 2rem 1rem; color: var(--cinza-texto); font-size: 0.9rem; }
+.lista-vazia .ico { font-size: 2rem; margin-bottom: 0.5rem; }
+.cat-label { display: inline-block; font-size: 0.68rem; font-weight: 700; padding: 2px 7px; border-radius: 10px; margin-left: 6px; }
+.cat-principal { background: #e8f0fe; color: #2d50c0; }
+.cat-acomp { background: var(--verde-claro); color: var(--verde); }
+.cat-bebida { background: #fff0d6; color: #7a4a00; }
+.cat-sobremesa { background: #fde8f5; color: #8a2060; }
+.cat-outro { background: var(--cinza-fundo); color: var(--cinza-texto); }
+#toast { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%) translateY(80px); background: var(--preto); color: #fff; padding: 10px 20px; border-radius: 20px; font-size: 0.88rem; font-weight: 500; z-index: 999; transition: transform 0.25s; white-space: nowrap; }
+#toast.show { transform: translateX(-50%) translateY(0); }
+.sub-head { font-size: 0.68rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--cinza-texto); margin: 0.75rem 0 0.25rem; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">Cantina <span>/ Escola</span></div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="irPara('aluno',this)">Sou aluno</button>
+    <button class="nav-tab" onclick="irPara('cantina',this)">Cantina</button>
+  </div>
+</nav>
+
+<!-- ALUNO -->
+<div id="page-aluno" class="page active">
+
+  <div id="aluno-sem-cardapio" class="card" style="display:none; text-align:center; padding:2rem">
+    <div style="font-size:2rem; margin-bottom:0.75rem">🍽️</div>
+    <div style="font-weight:700; margin-bottom:4px">Cardápio não disponível</div>
+    <div style="font-size:0.85rem; color:var(--cinza-texto)">A cantina ainda não definiu o cardápio de hoje. Volte em breve!</div>
+  </div>
+
+  <div id="aluno-com-cardapio">
+    <div class="card">
+      <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; margin-bottom:0.5rem">
+        <div>
+          <div style="font-size:0.68rem; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--verde); margin-bottom:3px">Refeição de hoje</div>
+          <div style="font-size:1.2rem; font-weight:700; line-height:1.2" id="aluno-titulo-prato">Carregando...</div>
+        </div>
+        <div id="aluno-pill" class="pill-status pill-aberto"><span class="dot"></span> Abertas</div>
+      </div>
+      <div style="font-size:0.82rem; color:var(--cinza-texto)" id="aluno-desc-prato"></div>
+    </div>
+
+    <div id="area-formulario">
+      <div class="card">
+        <div class="secao-titulo" style="margin-top:0">Seus dados</div>
+        <div class="form-group">
+          <label>Nome completo</label>
+          <input type="text" id="input-nome" placeholder="Ex: Ana Beatriz Silva">
+        </div>
+        <div class="form-group">
+          <label>Turma</label>
+          <select id="input-turma">
+            <option value="">Selecione sua turma</option>
+            <option>1 A</option><option>1 B</option><option>1 C</option>
+            <option>2 A</option><option>2 B</option><option>2 C</option>
+            <option>3 A</option><option>3 B</option><option>3 C</option>
+            <option>Professores e Staff</option>
+          </select>
+        </div>
+        <div class="secao-titulo">O que você vai querer?</div>
+        <div id="lista-selecao-itens"></div>
+        <div id="aviso-encerrado" class="aviso" style="display:none; margin-top:1rem">As reservas de hoje foram encerradas pela cantina.</div>
+        <button class="btn btn-verde" style="margin-top:1rem" id="btn-reservar" onclick="fazerReserva()">Confirmar reserva</button>
+      </div>
+    </div>
+
+    <div id="area-confirmacao" style="display:none">
+      <div class="card">
+        <div class="confirmacao">
+          <div class="confirmacao-icon">&#10003;</div>
+          <div style="font-size:1rem; font-weight:600; margin-bottom:4px">Reserva confirmada!</div>
+          <div class="senha-label">Sua senha de retirada</div>
+          <div class="numero-senha" id="senha-gerada">-</div>
+          <div class="senha-label">Quando a cantina chamar essa senha, venha buscar.</div>
+          <div class="resumo-pedido" id="resumo-itens-aluno"></div>
+          <div style="margin-top:1rem; background:var(--cinza-fundo); border-radius:var(--radius-sm); padding:0.75rem; font-size:0.82rem; color:var(--cinza-texto)">
+            Nao precisa ficar na fila — a cantina chamara as senhas em ordem!
+          </div>
+          <button class="btn btn-outline btn-sm" style="margin-top:1.25rem; width:auto" onclick="cancelarReserva()">Cancelar minha reserva</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CANTINA -->
+<div id="page-cantina" class="page">
+
+  <div id="area-pin" class="card" style="text-align:center; padding:2rem">
+    <div style="font-size:1.5rem; margin-bottom:0.5rem">&#128274;</div>
+    <div style="font-weight:700; margin-bottom:0.25rem">Acesso da cantina</div>
+    <div style="font-size:0.85rem; color:var(--cinza-texto); margin-bottom:1.25rem">Digite a senha para continuar</div>
+    <div class="form-group" style="max-width:200px; margin:0 auto 1rem">
+      <input type="text" id="input-pin" placeholder="Senha" style="text-align:center; font-size:1.1rem; letter-spacing:4px">
+    </div>
+    <button class="btn btn-verde" style="max-width:200px; margin:0 auto" onclick="entrarCantina()">Entrar</button>
+    <div style="font-size:0.75rem; color:var(--cinza-texto); margin-top:1rem">Senha padrao: <strong>1234</strong></div>
+  </div>
+
+  <div id="area-cantina" style="display:none">
+
+    <div class="secao-titulo">Cardapio de hoje</div>
+    <div class="card">
+      <div class="form-group">
+        <label>Nome geral (opcional)</label>
+        <input type="text" id="cant-titulo" placeholder="Ex: Almoco completo">
+      </div>
+      <div class="form-group">
+        <label>Descricao (opcional)</label>
+        <input type="text" id="cant-desc" placeholder="Ex: Servido das 11h as 13h">
+      </div>
+
+      <div class="secao-titulo" style="margin-top:0.25rem">Itens disponiveis</div>
+      <div id="cant-lista-itens">
+        <div style="font-size:0.85rem; color:var(--cinza-texto); padding:0.5rem 0">Nenhum item ainda.</div>
+      </div>
+
+      <div style="margin-top:1rem; padding-top:1rem; border-top:1px solid var(--cinza-borda)">
+        <div style="font-size:0.78rem; font-weight:600; color:var(--cinza-texto); margin-bottom:0.6rem">Adicionar item</div>
+        <div class="add-item-row">
+          <div class="form-group" style="flex:2; min-width:140px">
+            <label>Nome do item</label>
+            <input type="text" id="novo-item-nome" placeholder="Ex: Arroz branco">
+          </div>
+          <div class="form-group" style="min-width:130px">
+            <label>Categoria</label>
+            <select id="novo-item-cat">
+              <option value="principal">Prato principal</option>
+              <option value="acomp">Acompanhamento</option>
+              <option value="bebida">Bebida</option>
+              <option value="sobremesa">Sobremesa</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+          <div>
+            <button class="btn btn-verde btn-sm" style="width:auto" onclick="adicionarItem()">+ Adicionar</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:0.75rem 0; border-top:1px solid var(--cinza-borda); margin-top:0.5rem">
+        <div>
+          <div style="font-weight:600; font-size:0.9rem">Reservas abertas</div>
+          <div style="font-size:0.75rem; color:var(--cinza-texto)">Alunos podem se inscrever</div>
+        </div>
+        <button class="toggle on" id="toggle-reservas" onclick="toggleReservas()"></button>
+      </div>
+      <button class="btn btn-verde" onclick="salvarCardapio()">Salvar e publicar cardapio</button>
+    </div>
+
+    <div class="secao-titulo">Resumo do dia</div>
+    <div class="stats-row">
+      <div class="stat-card"><div class="stat-num" id="stat-total">0</div><div class="stat-label">Reservas</div></div>
+      <div class="stat-card"><div class="stat-num laranja" id="stat-aguardando">0</div><div class="stat-label">Aguardando</div></div>
+      <div class="stat-card"><div class="stat-num cinza" id="stat-entregue">0</div><div class="stat-label">Entregues</div></div>
+    </div>
+
+    <div class="secao-titulo">Quantidade por item</div>
+    <div class="card" id="card-contagem">
+      <div style="font-size:0.85rem; color:var(--cinza-texto); padding:0.25rem 0">Sem pedidos ainda.</div>
+    </div>
+
+    <div class="secao-titulo">Chamar proxima senha</div>
+    <div id="box-chamada" class="chamada-box chamada-vazia">
+      <div style="width:100%">Nenhum pedido aguardando</div>
+    </div>
+    <button class="btn btn-laranja" style="width:100%; margin-bottom:1rem" onclick="chamarProxima()">Chamar proxima senha</button>
+
+    <div class="secao-titulo">Todos os pedidos</div>
+    <div class="filtro-row">
+      <button class="chip active" onclick="filtrar('todos',this)">Todos</button>
+      <button class="chip" onclick="filtrar('aguardando',this)">Aguardando</button>
+      <button class="chip" onclick="filtrar('entregue',this)">Entregues</button>
+    </div>
+    <div class="card" style="padding:0 1.5rem">
+      <div id="lista-pedidos"><div class="lista-vazia"><div class="ico">🍽</div>Nenhum pedido ainda.</div></div>
+    </div>
+
+    <div class="secao-titulo">Turnos do dia</div>
+    <div class="card" id="card-turnos"></div>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+var CATS = { principal:'Prato principal', acomp:'Acompanhamento', bebida:'Bebida', sobremesa:'Sobremesa', outro:'Outro' };
+
+var E = {
+  titulo:'', descricao:'', reservasAbertas:true, itens:[], pedidos:[],
+  contadorSenha:0, senhaAtual:null, meuPedido:null, filtroAtual:'todos', cardapioPublicado:false
+};
+
+function carregar() {
+  try {
+    var s = localStorage.getItem('cantina_v3');
+    if (s) {
+      var salvo = JSON.parse(s);
+      var hoje = new Date().toDateString();
+      if (salvo.dia === hoje) { var mp = E.meuPedido; Object.assign(E, salvo); E.dia = undefined; E.meuPedido = mp; }
+    }
+    var meu = sessionStorage.getItem('meu_pedido_v3');
+    if (meu) E.meuPedido = JSON.parse(meu);
+  } catch(e) {}
+}
+
+function salvar() {
+  var obj = Object.assign({}, E, { dia: new Date().toDateString(), meuPedido: null });
+  localStorage.setItem('cantina_v3', JSON.stringify(obj));
+}
+
+function irPara(pagina, el) {
+  document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
+  document.querySelectorAll('.nav-tab').forEach(function(t){ t.classList.remove('active'); });
+  document.getElementById('page-'+pagina).classList.add('active');
+  el.classList.add('active');
+  if (pagina === 'aluno') renderAluno();
+  if (pagina === 'cantina') {
+    if (sessionStorage.getItem('cantina_auth')) {
+      document.getElementById('area-pin').style.display = 'none';
+      document.getElementById('area-cantina').style.display = 'block';
+    }
+    renderCantina();
+  }
+}
+
+function renderAluno() {
+  var sem = !E.cardapioPublicado || E.itens.length === 0;
+  document.getElementById('aluno-sem-cardapio').style.display = sem ? 'block' : 'none';
+  document.getElementById('aluno-com-cardapio').style.display = sem ? 'none' : 'block';
+  if (sem) return;
+  document.getElementById('aluno-titulo-prato').textContent = E.titulo || 'Refeicao do dia';
+  document.getElementById('aluno-desc-prato').textContent = E.descricao;
+  var pill = document.getElementById('aluno-pill');
+  if (E.reservasAbertas) {
+    pill.className = 'pill-status pill-aberto';
+    pill.innerHTML = '<span class="dot"></span> Abertas';
+  } else {
+    pill.className = 'pill-status pill-encerrado';
+    pill.innerHTML = '<span class="dot"></span> Encerradas';
+  }
+  document.getElementById('aviso-encerrado').style.display = E.reservasAbertas ? 'none' : 'block';
+  document.getElementById('btn-reservar').disabled = !E.reservasAbertas;
+
+  var cont = document.getElementById('lista-selecao-itens');
+  var ordemCat = ['principal','acomp','bebida','sobremesa','outro'];
+  var grupos = {};
+  E.itens.forEach(function(it){ if (!grupos[it.categoria]) grupos[it.categoria]=[]; grupos[it.categoria].push(it); });
+  var html = '';
+  ordemCat.forEach(function(cat){
+    if (!grupos[cat]) return;
+    html += '<div class="sub-head">'+CATS[cat]+'</div>';
+    grupos[cat].forEach(function(it){
+      html += '<div class="item-cardapio"><label class="checkbox-wrap"><input type="checkbox" id="cb-'+it.id+'" value="'+it.id+'"><span class="checkbox-box"></span><span class="item-nome">'+it.nome+'</span></label></div>';
+    });
+  });
+  cont.innerHTML = html || '<div style="font-size:0.85rem; color:var(--cinza-texto); padding:0.5rem 0">Sem itens.</div>';
+
+  if (E.meuPedido) {
+    document.getElementById('area-formulario').style.display = 'none';
+    document.getElementById('area-confirmacao').style.display = 'block';
+    document.getElementById('senha-gerada').textContent = E.meuPedido.senha;
+    var ul = E.meuPedido.itensSelecionados.map(function(n){ return '<li>'+n+'</li>'; }).join('');
+    document.getElementById('resumo-itens-aluno').innerHTML = '<ul>'+ul+'</ul>';
+  } else {
+    document.getElementById('area-formulario').style.display = 'block';
+    document.getElementById('area-confirmacao').style.display = 'none';
+  }
+}
+
+function fazerReserva() {
+  if (!E.reservasAbertas) { toast('Reservas encerradas.'); return; }
+  var nome = document.getElementById('input-nome').value.trim();
+  var turma = document.getElementById('input-turma').value;
+  if (!nome) { toast('Digite seu nome.'); return; }
+  if (!turma) { toast('Selecione sua turma.'); return; }
+  var checks = document.querySelectorAll('#lista-selecao-itens input[type="checkbox"]:checked');
+  if (checks.length === 0) { toast('Selecione pelo menos um item.'); return; }
+  var itensSelecionados = Array.from(checks).map(function(cb){
+    var it = E.itens.find(function(i){ return String(i.id) === cb.value; });
+    return it ? it.nome : '';
+  }).filter(Boolean);
+  E.contadorSenha++;
+  var hora = new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  var pedido = { senha: E.contadorSenha, nome: nome, turma: turma, hora: hora, itensSelecionados: itensSelecionados, status: 'aguardando' };
+  E.pedidos.push(pedido);
+  E.meuPedido = pedido;
+  sessionStorage.setItem('meu_pedido_v3', JSON.stringify(pedido));
+  salvar();
+  renderAluno();
+  toast('Reserva feita! Senha: ' + pedido.senha);
+}
+
+function cancelarReserva() {
+  if (!confirm('Cancelar sua reserva?')) return;
+  E.pedidos = E.pedidos.filter(function(p){ return p.senha !== E.meuPedido.senha; });
+  E.meuPedido = null;
+  sessionStorage.removeItem('meu_pedido_v3');
+  salvar();
+  renderAluno();
+  toast('Reserva cancelada.');
+}
+
+function entrarCantina() {
+  var pin = document.getElementById('input-pin').value;
+  if (pin === '1234') {
+    sessionStorage.setItem('cantina_auth','1');
+    document.getElementById('area-pin').style.display = 'none';
+    document.getElementById('area-cantina').style.display = 'block';
+    document.getElementById('cant-titulo').value = E.titulo;
+    document.getElementById('cant-desc').value = E.descricao;
+    renderCantina();
+  } else { toast('Senha incorreta.'); document.getElementById('input-pin').value = ''; }
+}
+
+function adicionarItem() {
+  var nome = document.getElementById('novo-item-nome').value.trim();
+  var cat = document.getElementById('novo-item-cat').value;
+  if (!nome) { toast('Digite o nome do item.'); return; }
+  E.itens.push({ id: Date.now(), nome: nome, categoria: cat });
+  document.getElementById('novo-item-nome').value = '';
+  renderListaItens();
+  toast('Item adicionado!');
+}
+
+function removerItem(id) {
+  E.itens = E.itens.filter(function(i){ return i.id !== id; });
+  renderListaItens();
+}
+
+function renderListaItens() {
+  var cont = document.getElementById('cant-lista-itens');
+  if (E.itens.length === 0) { cont.innerHTML = '<div style="font-size:0.85rem;color:var(--cinza-texto);padding:0.5rem 0">Nenhum item ainda.</div>'; return; }
+  var ordemCat = ['principal','acomp','bebida','sobremesa','outro'];
+  var grupos = {};
+  E.itens.forEach(function(it){ if (!grupos[it.categoria]) grupos[it.categoria]=[]; grupos[it.categoria].push(it); });
+  var html = '';
+  ordemCat.forEach(function(cat){
+    if (!grupos[cat]) return;
+    html += '<div class="sub-head">'+CATS[cat]+'</div>';
+    grupos[cat].forEach(function(it){
+      var qtd = E.pedidos.filter(function(p){ return p.itensSelecionados.indexOf(it.nome)>=0; }).length;
+      html += '<div class="cant-item-row"><span class="cant-item-nome">'+it.nome+'</span>';
+      html += '<span class="cant-item-qtd">'+(qtd>0?qtd+' pedido'+(qtd>1?'s':''):'')+'</span>';
+      html += '<button class="btn-del" onclick="removerItem('+it.id+')">x</button></div>';
+    });
+  });
+  cont.innerHTML = html;
+}
+
+function salvarCardapio() {
+  E.titulo = document.getElementById('cant-titulo').value.trim();
+  E.descricao = document.getElementById('cant-desc').value.trim();
+  E.cardapioPublicado = true;
+  salvar();
+  renderListaItens();
+  toast('Cardapio publicado!');
+}
+
+function toggleReservas() {
+  E.reservasAbertas = !E.reservasAbertas;
+  document.getElementById('toggle-reservas').classList.toggle('on', E.reservasAbertas);
+  salvar();
+  toast(E.reservasAbertas ? 'Reservas abertas.' : 'Reservas encerradas.');
+}
+
+function chamarProxima() {
+  var fila = E.pedidos.filter(function(p){ return p.status==='aguardando'; });
+  if (fila.length===0) { toast('Nenhum pedido na fila.'); return; }
+  if (E.senhaAtual !== null) {
+    var ant = E.pedidos.find(function(p){ return p.senha===E.senhaAtual; });
+    if (ant && ant.status==='aguardando') ant.status='entregue';
+  }
+  E.senhaAtual = fila[0].senha;
+  salvar();
+  renderCantina();
+}
+
+function marcarEntregue(senha) {
+  var p = E.pedidos.find(function(x){ return x.senha===senha; });
+  if (p) { p.status='entregue'; salvar(); renderCantina(); toast('Senha '+senha+' entregue.'); }
+}
+
+function filtrar(f, el) {
+  E.filtroAtual = f;
+  document.querySelectorAll('.chip').forEach(function(c){ c.classList.remove('active'); });
+  el.classList.add('active');
+  renderListaPedidos();
+}
+
+function renderCantina() {
+  if (document.getElementById('area-cantina').style.display==='none') return;
+  if (!document.getElementById('cant-titulo').value) document.getElementById('cant-titulo').value = E.titulo;
+  if (!document.getElementById('cant-desc').value) document.getElementById('cant-desc').value = E.descricao;
+  document.getElementById('toggle-reservas').classList.toggle('on', E.reservasAbertas);
+  renderListaItens();
+  var total = E.pedidos.length;
+  var aguardando = E.pedidos.filter(function(p){ return p.status==='aguardando'; }).length;
+  var entregue = E.pedidos.filter(function(p){ return p.status==='entregue'; }).length;
+  document.getElementById('stat-total').textContent = total;
+  document.getElementById('stat-aguardando').textContent = aguardando;
+  document.getElementById('stat-entregue').textContent = entregue;
+
+  var cardContagem = document.getElementById('card-contagem');
+  if (E.itens.length===0||total===0) {
+    cardContagem.innerHTML='<div style="font-size:0.85rem;color:var(--cinza-texto);padding:0.25rem 0">Sem pedidos ainda.</div>';
+  } else {
+    var maxQtd = Math.max.apply(null, E.itens.map(function(it){ return E.pedidos.filter(function(p){ return p.itensSelecionados.indexOf(it.nome)>=0; }).length; }).concat([1]));
+    cardContagem.innerHTML = E.itens.map(function(it){
+      var qtd = E.pedidos.filter(function(p){ return p.itensSelecionados.indexOf(it.nome)>=0; }).length;
+      var pct = Math.round(qtd/maxQtd*100);
+      return '<div class="contagem-item"><div class="contagem-nome">'+it.nome+'</div><div class="barra-wrap"><div class="barra-fill" style="width:'+pct+'%"></div></div><div class="contagem-num">'+qtd+'</div></div>';
+    }).join('');
+  }
+
+  var box = document.getElementById('box-chamada');
+  if (E.senhaAtual!==null) {
+    var p = E.pedidos.find(function(x){ return x.senha===E.senhaAtual; });
+    if (p) {
+      box.className='chamada-box';
+      box.innerHTML='<div style="flex:1;min-width:0"><div class="chamada-label">Senha chamada agora</div><div class="chamada-senha">'+p.senha+'</div><div class="chamada-nome">'+p.nome+' - '+p.turma+'</div><div class="chamada-itens">'+p.itensSelecionados.join(' / ')+'</div></div><button class="btn btn-outline btn-sm" style="border-color:rgba(255,255,255,0.5);color:#fff;background:rgba(255,255,255,0.12);white-space:nowrap;flex-shrink:0" onclick="marcarEntregue('+p.senha+')">Entregue</button>';
+    }
+  } else {
+    box.className='chamada-box chamada-vazia';
+    box.innerHTML='<div style="width:100%">Nenhuma senha chamada ainda</div>';
+  }
+  renderListaPedidos();
+}
+
+function renderListaPedidos() {
+  var lista = document.getElementById('lista-pedidos');
+  var pedidos = E.pedidos.slice().reverse();
+  if (E.filtroAtual==='aguardando') pedidos=pedidos.filter(function(p){ return p.status==='aguardando'; });
+  if (E.filtroAtual==='entregue') pedidos=pedidos.filter(function(p){ return p.status==='entregue'; });
+  if (pedidos.length===0) { lista.innerHTML='<div class="lista-vazia"><div class="ico">🍽</div>Nenhum pedido aqui.</div>'; return; }
+  lista.innerHTML = pedidos.map(function(p){
+    return '<div class="pedido-item"><div class="pedido-senha'+(p.status==='entregue'?' entregue':'')+'">'+p.senha+'</div><div class="pedido-info"><div class="pedido-nome">'+p.nome+'</div><div class="pedido-turma">'+p.turma+'</div><div class="pedido-itens">'+p.itensSelecionados.join(' / ')+'</div><div class="pedido-hora">'+p.hora+'</div></div><div>'+(p.status==='aguardando'?'<button class="btn btn-verde btn-sm" style="width:auto" onclick="marcarEntregue('+p.senha+')">Entregue</button>':'<span style="font-size:0.75rem;color:var(--cinza-texto)">Entregue</span>')+'</div></div>';
+  }).join('');
+}
+
+function resetarDia() {
+  if (!confirm('Apaga todos os pedidos e o cardapio. Confirmar?')) return;
+  E = { titulo:'', descricao:'', reservasAbertas:true, itens:[], pedidos:[], contadorSenha:0, senhaAtual:null, meuPedido:null, filtroAtual:'todos', cardapioPublicado:false };
+  sessionStorage.removeItem('meu_pedido_v3');
+  salvar();
+  document.getElementById('cant-titulo').value='';
+  document.getElementById('cant-desc').value='';
+  renderCantina();
+  toast('Novo dia iniciado!');
+}
+
+function toast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(function(){ t.classList.remove('show'); }, 2500);
+}
+
+carregar();
+renderAluno();
+setInterval(function(){
+  carregar();
+  if (document.getElementById('page-aluno').classList.contains('active')) renderAluno();
+  if (document.getElementById('page-cantina').classList.contains('active')) renderCantina();
+}, 10000);
+</script>
+</body>
+</html>
