@@ -109,11 +109,13 @@ function adicionarItem() {
   document.getElementById('novo-item-nome').value = '';
   document.getElementById('novo-item-preco').value = '';
   document.getElementById('novo-item-qtd').value = '';
+  salvarEstado();
   renderListaItens();
 }
 
 function removerItem(id) {
   cardapio.itens = cardapio.itens.filter(i => i.id !== id);
+  salvarEstado();
   renderListaItens();
 }
 
@@ -124,8 +126,8 @@ function renderListaItens() {
     return;
   }
   el.innerHTML = cardapio.itens.map(item => {
-    const badges = { principal:'cat-principal', acomp:'cat-acomp', bebida:'cat-bebida', sobremesa:'cat-sobremesa', outro:'cat-outro' };
-    const labels = { principal:'Principal', acomp:'Acomp.', bebida:'Bebida', sobremesa:'Sobremesa', outro:'Outro' };
+    const badges = { doce:'cat-sobremesa', salgado:'cat-principal', suco:'cat-bebida', cha:'cat-acomp', outro:'cat-outro' };
+    const labels = { doce:'Doce', salgado:'Salgado', suco:'Suco', cha:'Chá', outro:'Outro' };
     const vendidos = pedidos.filter(p => p.status !== 'cancelado').reduce((acc, p) => {
       return acc + (p.itens.filter(i => i.id === item.id).reduce((a,i)=>a+i.qtd,0));
     }, 0);
@@ -206,6 +208,11 @@ function renderSelecaoItens() {
   const el = document.getElementById('lista-selecao-itens');
   if (!el) return;
 
+  // Se já existem checkboxes renderizados, preserva o estado deles
+  const checkedIds = new Set(
+    [...el.querySelectorAll('input[type=checkbox]:checked')].map(c => c.value)
+  );
+
   const vendidosPorItem = {};
   pedidos.filter(p => p.status !== 'cancelado').forEach(p => {
     p.itens.forEach(i => { vendidosPorItem[i.id] = (vendidosPorItem[i.id] || 0) + i.qtd; });
@@ -218,10 +225,11 @@ function renderSelecaoItens() {
     const classeItem = esgotado ? 'item-cardapio esgotado' : 'item-cardapio';
     const estoqueLabel = restante === null ? '' : esgotado ? 'Esgotado' : restante <= 3 ? `Apenas ${restante}` : `${restante} disponíveis`;
     const estoqueClass = restante === null ? '' : esgotado ? 'esgotado' : restante <= 3 ? 'baixo' : '';
+    const checked = checkedIds.has(String(item.id)) && !esgotado ? 'checked' : '';
 
     return `<div class="${classeItem}">
       <label class="checkbox-wrap">
-        <input type="checkbox" name="item" value="${item.id}" ${esgotado ? 'disabled' : ''}>
+        <input type="checkbox" name="item" value="${item.id}" ${esgotado ? 'disabled' : ''} ${checked}>
         <span class="checkbox-box"></span>
         <span class="item-nome">${item.nome}</span>
         ${item.preco > 0 ? `<span class="item-preco">R$ ${item.preco.toFixed(2)}</span>` : ''}
