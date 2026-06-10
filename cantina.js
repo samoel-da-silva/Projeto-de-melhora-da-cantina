@@ -1,499 +1,520 @@
-var CATS = { principal:'Prato principal', acomp:'Acompanhamento', bebida:'Bebida', sobremesa:'Sobremesa', outro:'Outro' };
+// ══════════════════════════════════════════════
+//  Cantina do Lindaura — JS principal
+// ══════════════════════════════════════════════
 
-var E = {
-  titulo:'', descricao:'', reservasAbertas:true, itens:[], pedidos:[],
-  contadorSenha:0, senhaAtual:null, meuPedido:null, filtroAtual:'todos',
-  cardapioPublicado:false,
-  pagamento: { tipo: '', chave: '' }
+// ── Estado global ──────────────────────────────
+let cardapio = {
+  titulo: '',
+  descricao: '',
+  itens: [],          // { id, nome, categoria, preco, estoque, ativo }
+  reservasAbertas: true
 };
 
-/* ─── Persistência ─────────────────────────────────────────────────── */
+let pedidos = [];    // { id, senha, nome, turma, itens, total, status, hora, formaPagamento, pago }
+let proximaSenha = 1;
+let ultimaSenhaChamada = null;
+let filtroAtivo = 'todos';
+let pixConfig = { tipo: '', chave: '' };
 
-function carregar() {
+// ── Persistência ───────────────────────────────
+function salvarEstado() {
+  localStorage.setItem('cantina_cardapio', JSON.stringify(cardapio));
+  localStorage.setItem('cantina_pedidos', JSON.stringify(pedidos));
+  localStorage.setItem('cantina_senha', String(proximaSenha));
+  localStorage.setItem('cantina_pix', JSON.stringify(pixConfig));
+}
+
+function carregarEstado() {
   try {
-    var s = localStorage.getItem('cantina_v4');
-    if (s) {
-      var salvo = JSON.parse(s);
-      var hoje = new Date().toDateString();
-      if (salvo.dia === hoje) {
-        var mp = E.meuPedido;
-        Object.assign(E, salvo);
-        E.dia = undefined;
-        E.meuPedido = mp;
-        if (!E.pagamento) E.pagamento = { tipo: '', chave: '' };
-      }
-    }
-    var meu = sessionStorage.getItem('meu_pedido_v4');
-    if (meu) E.meuPedido = JSON.parse(meu);
-  } catch(e) {}
+    const c = localStorage.getItem('cantina_cardapio');
+    if (c) cardapio = JSON.parse(c);
+    const p = localStorage.getItem('cantina_pedidos');
+    if (p) pedidos = JSON.parse(p);
+    const s = localStorage.getItem('cantina_senha');
+    if (s) proximaSenha = parseInt(s) || 1;
+    const px = localStorage.getItem('cantina_pix');
+    if (px) pixConfig = JSON.parse(px);
+    const tema = localStorage.getItem('cantina_tema');
+    if (tema === 'escuro') aplicarTema('escuro', false);
+  } catch (e) {}
 }
 
-function salvar() {
-  var obj = Object.assign({}, E, { dia: new Date().toDateString(), meuPedido: null });
-  localStorage.setItem('cantina_v4', JSON.stringify(obj));
-}
-
-/* ─── Navegação ─────────────────────────────────────────────────────── */
-
-function irPara(pagina, el) {
-  document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
-  document.querySelectorAll('.nav-tab').forEach(function(t){ t.classList.remove('active'); });
-  document.getElementById('page-'+pagina).classList.add('active');
-  el.classList.add('active');
+// ── Navegação ──────────────────────────────────
+function irPara(pagina, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + pagina).classList.add('active');
+  if (btn) btn.classList.add('active');
   if (pagina === 'aluno') renderAluno();
-  if (pagina === 'cantina') {
-    if (sessionStorage.getItem('cantina_auth')) {
-      document.getElementById('area-pin').style.display = 'none';
-      document.getElementById('area-cantina').style.display = 'block';
-    }
-    renderCantina();
-  }
 }
 
-/* ─── Estoque helpers ───────────────────────────────────────────────── */
+// ── Tema escuro ────────────────────────────────
+let temaAtual = 'claro';
 
-function estoqueRestante(it) {
-  if (it.quantidade === undefined || it.quantidade === null || it.quantidade === '') return null;
-  var qtd = parseInt(it.quantidade, 10);
-  if (isNaN(qtd)) return null;
-  var reservados = E.pedidos.filter(function(p){
-    return p.status !== 'cancelado' && p.itensSelecionados.indexOf(it.nome) >= 0;
-  }).length;
-  return Math.max(0, qtd - reservados);
+function toggleTema() {
+  aplicarTema(temaAtual === 'claro' ? 'escuro' : 'claro', true);
 }
 
-function estoqueClasse(restante) {
-  if (restante === null) return '';
-  if (restante === 0) return 'esgotado';
-  if (restante <= 3) return 'baixo';
-  return 'ok';
-}
-
-function estoqueTexto(it) {
-  var r = estoqueRestante(it);
-  if (r === null) return '';
-  if (r === 0) return 'Esgotado';
-  if (r === 1) return '1 restante';
-  return r + ' restantes';
-}
-
-/* ─── Preço helpers ─────────────────────────────────────────────────── */
-
-function formatarPreco(preco) {
-  if (!preco && preco !== 0) return '';
-  return 'R$ ' + parseFloat(preco).toFixed(2).replace('.', ',');
-}
-
-function totalPedido(itensSelecionados) {
-  var total = 0;
-  itensSelecionados.forEach(function(nome) {
-    var it = E.itens.find(function(i){ return i.nome === nome; });
-    if (it && it.preco) total += parseFloat(it.preco) || 0;
-  });
-  return total;
-}
-
-/* ─── Render Aluno ──────────────────────────────────────────────────── */
-
-function renderAluno() {
-  var sem = !E.cardapioPublicado || E.itens.length === 0;
-  document.getElementById('aluno-sem-cardapio').style.display = sem ? 'block' : 'none';
-  document.getElementById('aluno-com-cardapio').style.display = sem ? 'none' : 'block';
-  if (sem) return;
-
-  document.getElementById('aluno-titulo-prato').textContent = E.titulo || 'Refeicao do dia';
-  document.getElementById('aluno-desc-prato').textContent = E.descricao;
-
-  var pill = document.getElementById('aluno-pill');
-  if (E.reservasAbertas) {
-    pill.className = 'pill-status pill-aberto';
-    pill.innerHTML = '<span class="dot"></span> Abertas';
+function aplicarTema(tema, salvar) {
+  temaAtual = tema;
+  if (tema === 'escuro') {
+    document.documentElement.setAttribute('data-tema', 'escuro');
   } else {
-    pill.className = 'pill-status pill-encerrado';
-    pill.innerHTML = '<span class="dot"></span> Encerradas';
+    document.documentElement.removeAttribute('data-tema');
   }
-  document.getElementById('aviso-encerrado').style.display = E.reservasAbertas ? 'none' : 'block';
-  document.getElementById('btn-reservar').disabled = !E.reservasAbertas;
-
-  var cont = document.getElementById('lista-selecao-itens');
-  var ordemCat = ['principal','acomp','bebida','sobremesa','outro'];
-  var grupos = {};
-  E.itens.forEach(function(it){ if (!grupos[it.categoria]) grupos[it.categoria]=[]; grupos[it.categoria].push(it); });
-  var html = '';
-  ordemCat.forEach(function(cat){
-    if (!grupos[cat]) return;
-    html += '<div class="sub-head">'+CATS[cat]+'</div>';
-    grupos[cat].forEach(function(it){
-      var restante = estoqueRestante(it);
-      var esgotado = restante !== null && restante === 0;
-      var classeRow = esgotado ? ' esgotado' : '';
-      var precoHtml = it.preco ? '<span class="item-preco">'+formatarPreco(it.preco)+'</span>' : '';
-      var estoqueHtml = '';
-      if (restante !== null) {
-        var cls = estoqueClasse(restante);
-        estoqueHtml = '<span class="item-estoque '+cls+'">'+estoqueTexto(it)+'</span>';
-      }
-      html += '<div class="item-cardapio'+classeRow+'">';
-      html += '<label class="checkbox-wrap">';
-      html += '<input type="checkbox" id="cb-'+it.id+'" value="'+it.id+'"'+(esgotado?' disabled':'')+'>';
-      html += '<span class="checkbox-box"></span>';
-      html += '<span class="item-nome">'+it.nome+'</span>';
-      html += '</label>';
-      if (precoHtml || estoqueHtml) {
-        html += '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">'+precoHtml+estoqueHtml+'</div>';
-      }
-      html += '</div>';
-    });
-  });
-  cont.innerHTML = html || '<div style="font-size:0.85rem; color:var(--cinza-texto); padding:0.5rem 0">Sem itens.</div>';
-
-  // PIX info para o aluno
-  renderPixAluno();
-
-  if (E.meuPedido) {
-    document.getElementById('area-formulario').style.display = 'none';
-    document.getElementById('area-confirmacao').style.display = 'block';
-    document.getElementById('senha-gerada').textContent = E.meuPedido.senha;
-    var total = totalPedido(E.meuPedido.itensSelecionados);
-    var ul = E.meuPedido.itensSelecionados.map(function(n){
-      var it = E.itens.find(function(i){ return i.nome === n; });
-      var p = it && it.preco ? ' — ' + formatarPreco(it.preco) : '';
-      return '<li>'+n+p+'</li>';
-    }).join('');
-    var totalHtml = total > 0 ? '<div class="total-pedido">Total: '+formatarPreco(total)+'</div>' : '';
-    document.getElementById('resumo-itens-aluno').innerHTML = '<ul>'+ul+'</ul>'+totalHtml;
-  } else {
-    document.getElementById('area-formulario').style.display = 'block';
-    document.getElementById('area-confirmacao').style.display = 'none';
-  }
+  const btn = document.getElementById('btn-tema');
+  if (btn) btn.textContent = tema === 'escuro' ? '☀️' : '🌙';
+  if (salvar) localStorage.setItem('cantina_tema', tema);
 }
 
-function renderPixAluno() {
-  var el = document.getElementById('pix-info-aluno');
-  if (!el) return;
-  if (!E.pagamento || !E.pagamento.chave) {
-    el.style.display = 'none';
-    return;
-  }
-  el.style.display = 'block';
-  var tipoLabel = { cpf:'CPF', cnpj:'CNPJ', email:'E-mail', telefone:'Telefone', aleatoria:'Chave aleatória' };
-  var label = tipoLabel[E.pagamento.tipo] || 'Chave PIX';
-  document.getElementById('pix-aluno-tipo').textContent = label;
-  document.getElementById('pix-aluno-chave').textContent = E.pagamento.chave;
+// ── Toast ──────────────────────────────────────
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
 }
 
-/* ─── Reservas (Aluno) ──────────────────────────────────────────────── */
-
-function fazerReserva() {
-  if (!E.reservasAbertas) { toast('Reservas encerradas.'); return; }
-  var nome = document.getElementById('input-nome').value.trim();
-  var turma = document.getElementById('input-turma').value;
-  if (!nome) { toast('Digite seu nome.'); return; }
-  if (!turma) { toast('Selecione sua turma.'); return; }
-  var checks = document.querySelectorAll('#lista-selecao-itens input[type="checkbox"]:checked');
-  if (checks.length === 0) { toast('Selecione pelo menos um item.'); return; }
-
-  // Verificar estoque antes de confirmar
-  var itensSelecionados = [];
-  var semEstoque = [];
-  Array.from(checks).forEach(function(cb){
-    var it = E.itens.find(function(i){ return String(i.id) === cb.value; });
-    if (!it) return;
-    var restante = estoqueRestante(it);
-    if (restante !== null && restante <= 0) {
-      semEstoque.push(it.nome);
-    } else {
-      itensSelecionados.push(it.nome);
-    }
-  });
-  if (semEstoque.length > 0) {
-    toast('Sem estoque: ' + semEstoque.join(', '));
-    renderAluno();
-    return;
-  }
-  if (itensSelecionados.length === 0) { toast('Selecione pelo menos um item.'); return; }
-
-  E.contadorSenha++;
-  var hora = new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-  var total = totalPedido(itensSelecionados);
-  var pedido = { senha: E.contadorSenha, nome: nome, turma: turma, hora: hora, itensSelecionados: itensSelecionados, total: total, status: 'aguardando' };
-  E.pedidos.push(pedido);
-  E.meuPedido = pedido;
-  sessionStorage.setItem('meu_pedido_v4', JSON.stringify(pedido));
-  salvar();
-  renderAluno();
-  toast('Reserva feita! Senha: ' + pedido.senha);
-}
-
-function cancelarReserva() {
-  if (!confirm('Cancelar sua reserva?')) return;
-  E.pedidos = E.pedidos.filter(function(p){ return p.senha !== E.meuPedido.senha; });
-  E.meuPedido = null;
-  sessionStorage.removeItem('meu_pedido_v4');
-  salvar();
-  renderAluno();
-  toast('Reserva cancelada.');
-}
-
-/* ─── Acesso Cantina ────────────────────────────────────────────────── */
-
+// ── PIN da cantina ─────────────────────────────
 function entrarCantina() {
-  var pin = document.getElementById('input-pin').value;
-  if (pin === '1234') {
-    sessionStorage.setItem('cantina_auth','1');
+  const pin = document.getElementById('input-pin').value.trim();
+  const pinSalvo = localStorage.getItem('cantina_pin') || '1234';
+  if (pin === pinSalvo) {
     document.getElementById('area-pin').style.display = 'none';
     document.getElementById('area-cantina').style.display = 'block';
-    document.getElementById('cant-titulo').value = E.titulo;
-    document.getElementById('cant-desc').value = E.descricao;
     renderCantina();
-    renderConfigPix();
-  } else { toast('Senha incorreta.'); document.getElementById('input-pin').value = ''; }
+  } else {
+    toast('Senha incorreta!');
+    document.getElementById('input-pin').value = '';
+  }
 }
 
-/* ─── Itens do Cardápio (Cantina) ───────────────────────────────────── */
-
+// ── Cardápio ───────────────────────────────────
 function adicionarItem() {
-  var nome = document.getElementById('novo-item-nome').value.trim();
-  var cat = document.getElementById('novo-item-cat').value;
-  var preco = document.getElementById('novo-item-preco').value.trim();
-  var quantidade = document.getElementById('novo-item-qtd').value.trim();
+  const nome = document.getElementById('novo-item-nome').value.trim();
+  const cat = document.getElementById('novo-item-cat').value;
+  const preco = parseFloat(document.getElementById('novo-item-preco').value) || 0;
+  const qtdVal = document.getElementById('novo-item-qtd').value;
+  const estoque = qtdVal === '' ? null : parseInt(qtdVal);
 
   if (!nome) { toast('Digite o nome do item.'); return; }
 
-  var precoNum = preco ? parseFloat(preco.replace(',','.')) : null;
-  var qtdNum = quantidade ? parseInt(quantidade, 10) : null;
-  if (preco && isNaN(precoNum)) { toast('Preço inválido.'); return; }
-  if (quantidade && (isNaN(qtdNum) || qtdNum < 0)) { toast('Quantidade inválida.'); return; }
-
-  E.itens.push({
+  cardapio.itens.push({
     id: Date.now(),
-    nome: nome,
-    categoria: cat,
-    preco: precoNum,
-    quantidade: qtdNum
+    nome, cat, preco,
+    estoque,           // null = sem limite
+    ativo: true
   });
 
   document.getElementById('novo-item-nome').value = '';
   document.getElementById('novo-item-preco').value = '';
   document.getElementById('novo-item-qtd').value = '';
   renderListaItens();
-  toast('Item adicionado!');
 }
 
 function removerItem(id) {
-  E.itens = E.itens.filter(function(i){ return i.id !== id; });
+  cardapio.itens = cardapio.itens.filter(i => i.id !== id);
   renderListaItens();
 }
 
 function renderListaItens() {
-  var cont = document.getElementById('cant-lista-itens');
-  if (E.itens.length === 0) {
-    cont.innerHTML = '<div style="font-size:0.85rem;color:var(--cinza-texto);padding:0.5rem 0">Nenhum item ainda.</div>';
+  const el = document.getElementById('cant-lista-itens');
+  if (!cardapio.itens.length) {
+    el.innerHTML = '<div style="font-size:0.85rem;color:var(--cinza-texto);padding:0.5rem 0">Nenhum item ainda.</div>';
     return;
   }
-  var ordemCat = ['principal','acomp','bebida','sobremesa','outro'];
-  var grupos = {};
-  E.itens.forEach(function(it){ if (!grupos[it.categoria]) grupos[it.categoria]=[]; grupos[it.categoria].push(it); });
-  var html = '';
-  ordemCat.forEach(function(cat){
-    if (!grupos[cat]) return;
-    html += '<div class="sub-head">'+CATS[cat]+'</div>';
-    grupos[cat].forEach(function(it){
-      var reservados = E.pedidos.filter(function(p){ return p.itensSelecionados.indexOf(it.nome)>=0; }).length;
-      var restante = estoqueRestante(it);
-      var cls = estoqueClasse(restante);
-      var estoqueHtml = '';
-      if (restante !== null) {
-        estoqueHtml = '<span class="cant-item-estoque '+cls+'">'+estoqueTexto(it)+' ('+reservados+' res.)</span>';
-      } else {
-        estoqueHtml = reservados > 0 ? '<span class="cant-item-estoque">'+reservados+' reserva'+(reservados>1?'s':'')+'</span>' : '';
-      }
-      var precoHtml = it.preco ? '<span class="cant-item-preco">'+formatarPreco(it.preco)+'</span>' : '';
-      html += '<div class="cant-item-row">';
-      html += '<span class="cant-item-nome">'+it.nome+'</span>';
-      html += '<div class="cant-item-info">'+precoHtml+estoqueHtml+'</div>';
-      html += '<button class="btn-del" onclick="removerItem('+it.id+')" title="Remover item">×</button>';
-      html += '</div>';
-    });
-  });
-  cont.innerHTML = html;
-}
+  el.innerHTML = cardapio.itens.map(item => {
+    const badges = { principal:'cat-principal', acomp:'cat-acomp', bebida:'cat-bebida', sobremesa:'cat-sobremesa', outro:'cat-outro' };
+    const labels = { principal:'Principal', acomp:'Acomp.', bebida:'Bebida', sobremesa:'Sobremesa', outro:'Outro' };
+    const vendidos = pedidos.filter(p => p.status !== 'cancelado').reduce((acc, p) => {
+      return acc + (p.itens.filter(i => i.id === item.id).reduce((a,i)=>a+i.qtd,0));
+    }, 0);
+    const restante = item.estoque !== null ? item.estoque - vendidos : null;
+    const estoqueClass = restante === null ? 'ok' : restante <= 0 ? 'esgotado' : restante <= 3 ? 'baixo' : 'ok';
+    const estoqueLabel = restante === null ? 'Sem limite' : restante <= 0 ? 'Esgotado' : `${restante} restante${restante !== 1 ? 's' : ''}`;
 
-/* ─── Cardápio / Toggle ─────────────────────────────────────────────── */
-
-function salvarCardapio() {
-  E.titulo = document.getElementById('cant-titulo').value.trim();
-  E.descricao = document.getElementById('cant-desc').value.trim();
-  E.cardapioPublicado = true;
-  salvar();
-  renderListaItens();
-  toast('Cardápio publicado!');
-}
-
-function toggleReservas() {
-  E.reservasAbertas = !E.reservasAbertas;
-  document.getElementById('toggle-reservas').classList.toggle('on', E.reservasAbertas);
-  salvar();
-  toast(E.reservasAbertas ? 'Reservas abertas.' : 'Reservas encerradas.');
-}
-
-/* ─── Chamada de Senhas ─────────────────────────────────────────────── */
-
-function chamarProxima() {
-  var fila = E.pedidos.filter(function(p){ return p.status==='aguardando'; });
-  if (fila.length===0) { toast('Nenhum pedido na fila.'); return; }
-  if (E.senhaAtual !== null) {
-    var ant = E.pedidos.find(function(p){ return p.senha===E.senhaAtual; });
-    if (ant && ant.status==='aguardando') ant.status='entregue';
-  }
-  E.senhaAtual = fila[0].senha;
-  salvar();
-  renderCantina();
-}
-
-function marcarEntregue(senha) {
-  var p = E.pedidos.find(function(x){ return x.senha===senha; });
-  if (p) { p.status='entregue'; salvar(); renderCantina(); toast('Senha '+senha+' entregue.'); }
-}
-
-/* ─── Filtro de Pedidos ─────────────────────────────────────────────── */
-
-function filtrar(f, el) {
-  E.filtroAtual = f;
-  document.querySelectorAll('.chip').forEach(function(c){ c.classList.remove('active'); });
-  el.classList.add('active');
-  renderListaPedidos();
-}
-
-/* ─── Render Cantina ────────────────────────────────────────────────── */
-
-function renderCantina() {
-  if (document.getElementById('area-cantina').style.display==='none') return;
-  if (!document.getElementById('cant-titulo').value) document.getElementById('cant-titulo').value = E.titulo;
-  if (!document.getElementById('cant-desc').value) document.getElementById('cant-desc').value = E.descricao;
-  document.getElementById('toggle-reservas').classList.toggle('on', E.reservasAbertas);
-  renderListaItens();
-
-  var total = E.pedidos.length;
-  var aguardando = E.pedidos.filter(function(p){ return p.status==='aguardando'; }).length;
-  var entregue = E.pedidos.filter(function(p){ return p.status==='entregue'; }).length;
-  document.getElementById('stat-total').textContent = total;
-  document.getElementById('stat-aguardando').textContent = aguardando;
-  document.getElementById('stat-entregue').textContent = entregue;
-
-  // Faturamento total
-  var faturamento = E.pedidos.reduce(function(acc, p){ return acc + (p.total || 0); }, 0);
-  var elFat = document.getElementById('stat-faturamento');
-  if (elFat) elFat.textContent = faturamento > 0 ? formatarPreco(faturamento) : 'R$ 0,00';
-
-  // Contagem por item + estoque
-  var cardContagem = document.getElementById('card-contagem');
-  if (E.itens.length===0||total===0) {
-    cardContagem.innerHTML='<div style="font-size:0.85rem;color:var(--cinza-texto);padding:0.25rem 0">Sem pedidos ainda.</div>';
-  } else {
-    var maxQtd = Math.max.apply(null, E.itens.map(function(it){
-      return E.pedidos.filter(function(p){ return p.itensSelecionados.indexOf(it.nome)>=0; }).length;
-    }).concat([1]));
-    cardContagem.innerHTML = E.itens.map(function(it){
-      var qtd = E.pedidos.filter(function(p){ return p.itensSelecionados.indexOf(it.nome)>=0; }).length;
-      var restante = estoqueRestante(it);
-      var pct = Math.round(qtd/maxQtd*100);
-      var barCls = '';
-      if (restante !== null) { barCls = estoqueClasse(restante); }
-      var estoqueInfo = restante !== null ? '<div class="contagem-estoque '+estoqueClasse(restante)+'">'+estoqueTexto(it)+'</div>' : '';
-      return '<div class="contagem-item"><div class="contagem-nome">'+it.nome+'</div><div class="barra-wrap"><div class="barra-fill '+barCls+'" style="width:'+pct+'%"></div></div><div class="contagem-num">'+qtd+'</div>'+estoqueInfo+'</div>';
-    }).join('');
-  }
-
-  // Box de chamada
-  var box = document.getElementById('box-chamada');
-  if (E.senhaAtual!==null) {
-    var p = E.pedidos.find(function(x){ return x.senha===E.senhaAtual; });
-    if (p) {
-      box.className='chamada-box';
-      var totalStr = p.total ? ' · '+formatarPreco(p.total) : '';
-      box.innerHTML='<div style="flex:1;min-width:0"><div class="chamada-label">Senha chamada agora</div><div class="chamada-senha">'+p.senha+'</div><div class="chamada-nome">'+p.nome+' — '+p.turma+'</div><div class="chamada-itens">'+p.itensSelecionados.join(' / ')+totalStr+'</div></div><button class="btn btn-outline btn-sm" style="border-color:rgba(255,255,255,0.5);color:#fff;background:rgba(255,255,255,0.12);white-space:nowrap;flex-shrink:0" onclick="marcarEntregue('+p.senha+')">Entregue</button>';
-    }
-  } else {
-    box.className='chamada-box chamada-vazia';
-    box.innerHTML='<div style="width:100%">Nenhuma senha chamada ainda</div>';
-  }
-  renderListaPedidos();
-  renderFaturamento();
-}
-
-function renderListaPedidos() {
-  var lista = document.getElementById('lista-pedidos');
-  var pedidos = E.pedidos.slice().reverse();
-  if (E.filtroAtual==='aguardando') pedidos=pedidos.filter(function(p){ return p.status==='aguardando'; });
-  if (E.filtroAtual==='entregue') pedidos=pedidos.filter(function(p){ return p.status==='entregue'; });
-  if (pedidos.length===0) { lista.innerHTML='<div class="lista-vazia"><div class="ico">🍽</div>Nenhum pedido aqui.</div>'; return; }
-  lista.innerHTML = pedidos.map(function(p){
-    var totalStr = p.total ? '<div class="pedido-total">'+formatarPreco(p.total)+'</div>' : '';
-    return '<div class="pedido-item"><div class="pedido-senha'+(p.status==='entregue'?' entregue':'')+'">'+p.senha+'</div><div class="pedido-info"><div class="pedido-nome">'+p.nome+'</div><div class="pedido-turma">'+p.turma+'</div><div class="pedido-itens">'+p.itensSelecionados.join(' / ')+'</div>'+totalStr+'<div class="pedido-hora">'+p.hora+'</div></div><div>'+(p.status==='aguardando'?'<button class="btn btn-verde btn-sm" style="width:auto" onclick="marcarEntregue('+p.senha+')">Entregue</button>':'<span style="font-size:0.75rem;color:var(--cinza-texto)">Entregue</span>')+'</div></div>';
+    return `<div class="cant-item-row">
+      <div class="cant-item-nome">${item.nome}
+        <span class="cat-label ${badges[item.cat]||'cat-outro'}">${labels[item.cat]||'Outro'}</span>
+      </div>
+      <div class="cant-item-info">
+        <span class="cant-item-preco">R$ ${item.preco.toFixed(2)}</span>
+        <span class="estoque-badge ${estoqueClass}">${estoqueLabel}</span>
+      </div>
+      <button class="btn-del" onclick="removerItem(${item.id})" title="Remover">✕</button>
+    </div>`;
   }).join('');
 }
 
-/* ─── Faturamento ───────────────────────────────────────────────────── */
+function toggleReservas() {
+  cardapio.reservasAbertas = !cardapio.reservasAbertas;
+  const btn = document.getElementById('toggle-reservas');
+  btn.classList.toggle('on', cardapio.reservasAbertas);
+  salvarEstado();
+  renderAvisoEncerrado();
+}
 
-function renderFaturamento() {
-  var cont = document.getElementById('card-faturamento');
-  if (!cont) return;
-  if (E.itens.length === 0 || E.pedidos.length === 0) {
-    cont.innerHTML = '<div style="font-size:0.85rem;color:var(--cinza-texto)">Sem dados ainda.</div>';
+function salvarCardapio() {
+  cardapio.titulo = document.getElementById('cant-titulo').value.trim();
+  cardapio.descricao = document.getElementById('cant-desc').value.trim();
+  salvarEstado();
+  toast('Cardápio publicado!');
+  renderAluno();
+}
+
+// ── PIX / Pagamento ────────────────────────────
+function salvarPix() {
+  pixConfig.tipo = document.getElementById('pix-tipo-select').value;
+  pixConfig.chave = document.getElementById('pix-chave-input').value.trim();
+  salvarEstado();
+  toast('Dados de pagamento salvos!');
+}
+
+// ── Render Aluno ───────────────────────────────
+function renderAluno() {
+  const semCard = document.getElementById('aluno-sem-cardapio');
+  const comCard = document.getElementById('aluno-com-cardapio');
+
+  if (!cardapio.itens.length) {
+    semCard.style.display = 'block';
+    comCard.style.display = 'none';
     return;
   }
-  var html = '';
-  E.itens.forEach(function(it) {
-    if (!it.preco) return;
-    var qtd = E.pedidos.filter(function(p){ return p.itensSelecionados.indexOf(it.nome) >= 0; }).length;
-    if (qtd === 0) return;
-    var sub = qtd * parseFloat(it.preco);
-    html += '<div class="faturamento-row"><span>'+it.nome+' ×'+qtd+'</span><span>'+formatarPreco(sub)+'</span></div>';
+  semCard.style.display = 'none';
+  comCard.style.display = 'block';
+
+  document.getElementById('aluno-titulo-prato').textContent = cardapio.titulo || 'Cardápio do dia';
+  document.getElementById('aluno-desc-prato').textContent = cardapio.descricao || '';
+
+  const pill = document.getElementById('aluno-pill');
+  pill.className = 'pill-status ' + (cardapio.reservasAbertas ? 'pill-aberto' : 'pill-encerrado');
+  pill.innerHTML = `<span class="dot"></span> ${cardapio.reservasAbertas ? 'Abertas' : 'Encerradas'}`;
+
+  renderAvisoEncerrado();
+  renderSelecaoItens();
+  renderPixAluno();
+}
+
+function renderAvisoEncerrado() {
+  const aviso = document.getElementById('aviso-encerrado');
+  const btn = document.getElementById('btn-reservar');
+  if (aviso) aviso.style.display = cardapio.reservasAbertas ? 'none' : 'block';
+  if (btn) btn.disabled = !cardapio.reservasAbertas;
+}
+
+function renderSelecaoItens() {
+  const el = document.getElementById('lista-selecao-itens');
+  if (!el) return;
+
+  const vendidosPorItem = {};
+  pedidos.filter(p => p.status !== 'cancelado').forEach(p => {
+    p.itens.forEach(i => { vendidosPorItem[i.id] = (vendidosPorItem[i.id] || 0) + i.qtd; });
   });
-  var totalGeral = E.pedidos.reduce(function(acc, p){ return acc + (p.total || 0); }, 0);
-  if (html) {
-    html += '<div class="faturamento-total"><span>Total arrecadado</span><span>'+formatarPreco(totalGeral)+'</span></div>';
+
+  el.innerHTML = cardapio.itens.map(item => {
+    const vendidos = vendidosPorItem[item.id] || 0;
+    const restante = item.estoque !== null ? item.estoque - vendidos : null;
+    const esgotado = restante !== null && restante <= 0;
+    const classeItem = esgotado ? 'item-cardapio esgotado' : 'item-cardapio';
+    const estoqueLabel = restante === null ? '' : esgotado ? 'Esgotado' : restante <= 3 ? `Apenas ${restante}` : `${restante} disponíveis`;
+    const estoqueClass = restante === null ? '' : esgotado ? 'esgotado' : restante <= 3 ? 'baixo' : '';
+
+    return `<div class="${classeItem}">
+      <label class="checkbox-wrap">
+        <input type="checkbox" name="item" value="${item.id}" ${esgotado ? 'disabled' : ''}>
+        <span class="checkbox-box"></span>
+        <span class="item-nome">${item.nome}</span>
+        ${item.preco > 0 ? `<span class="item-preco">R$ ${item.preco.toFixed(2)}</span>` : ''}
+        ${estoqueLabel ? `<span class="item-estoque ${estoqueClass}">${estoqueLabel}</span>` : ''}
+      </label>
+    </div>`;
+  }).join('');
+}
+
+function renderPixAluno() {
+  const box = document.getElementById('pix-info-aluno');
+  if (!box) return;
+  if (pixConfig.tipo && pixConfig.chave) {
+    box.style.display = 'block';
+    document.getElementById('pix-aluno-tipo').textContent = pixConfig.tipo.toUpperCase();
+    document.getElementById('pix-aluno-chave').textContent = pixConfig.chave;
   } else {
-    html = '<div style="font-size:0.85rem;color:var(--cinza-texto)">Nenhum item com preço definido.</div>';
+    box.style.display = 'none';
   }
-  cont.innerHTML = html;
 }
 
-/* ─── Pagamento / PIX ───────────────────────────────────────────────── */
+// ── Reserva ────────────────────────────────────
+function fazerReserva() {
+  if (!cardapio.reservasAbertas) { toast('Reservas encerradas.'); return; }
 
-function renderConfigPix() {
-  if (!E.pagamento) E.pagamento = { tipo: '', chave: '' };
-  var tipoSelect = document.getElementById('pix-tipo-select');
-  var chaveInput = document.getElementById('pix-chave-input');
-  if (tipoSelect) tipoSelect.value = E.pagamento.tipo || '';
-  if (chaveInput) chaveInput.value = E.pagamento.chave || '';
+  const nome = document.getElementById('input-nome').value.trim();
+  const turma = document.getElementById('input-turma').value;
+  if (!nome) { toast('Digite seu nome.'); return; }
+  if (!turma) { toast('Selecione sua turma.'); return; }
+
+  const checks = [...document.querySelectorAll('#lista-selecao-itens input[type=checkbox]:checked')];
+  if (!checks.length) { toast('Selecione ao menos um item.'); return; }
+
+  const itensPedido = checks.map(c => {
+    const item = cardapio.itens.find(i => i.id == c.value);
+    return { id: item.id, nome: item.nome, preco: item.preco, qtd: 1 };
+  });
+
+  const total = itensPedido.reduce((acc, i) => acc + i.preco * i.qtd, 0);
+  const forma = document.querySelector('input[name="forma-pagamento"]:checked')?.value || 'pix';
+  const senha = proximaSenha++;
+
+  const pedido = {
+    id: Date.now(),
+    senha,
+    nome, turma,
+    itens: itensPedido,
+    total,
+    status: 'aguardando',
+    hora: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+    formaPagamento: forma,
+    pago: forma !== 'pix'  // cartão e dinheiro marcados como "a confirmar" — só PIX fica "pendente"
+  };
+
+  pedidos.push(pedido);
+  salvarEstado();
+
+  // Mostra confirmação
+  document.getElementById('area-formulario').style.display = 'none';
+  document.getElementById('area-confirmacao').style.display = 'block';
+  document.getElementById('senha-gerada').textContent = String(senha).padStart(2, '0');
+
+  const resumo = document.getElementById('resumo-itens-aluno');
+  const icones = { pix: '💸 PIX', cartao: '💳 Cartão', dinheiro: '💵 Dinheiro' };
+  resumo.innerHTML = `
+    <ul>${itensPedido.map(i => `<li>${i.nome}${i.preco > 0 ? ' — R$ ' + i.preco.toFixed(2) : ''}</li>`).join('')}</ul>
+    ${total > 0 ? `<div class="total-pedido">Total: R$ ${total.toFixed(2)}</div>` : ''}
+    <div style="margin-top:0.5rem; font-size:0.8rem; color:var(--cinza-texto)">Pagamento: ${icones[forma] || forma}</div>
+    ${forma === 'pix' ? `<div style="margin-top:0.4rem; font-size:0.78rem; color:var(--laranja); font-weight:600">⚠️ Confirme o pagamento via PIX antes de retirar.</div>` : ''}
+  `;
+
+  renderCantina();
 }
 
-function salvarPix() {
-  var tipo = document.getElementById('pix-tipo-select').value;
-  var chave = document.getElementById('pix-chave-input').value.trim();
-  if (!tipo && chave) { toast('Selecione o tipo de chave PIX.'); return; }
-  E.pagamento = { tipo: tipo, chave: chave };
-  salvar();
-  toast(chave ? 'Dados de pagamento salvos!' : 'Dados de pagamento removidos.');
+function cancelarReserva() {
+  // Encontra o último pedido desse "aluno" (último da sessão)
+  const senha = parseInt(document.getElementById('senha-gerada').textContent);
+  const idx = pedidos.findIndex(p => p.senha === senha);
+  if (idx !== -1) {
+    pedidos[idx].status = 'cancelado';
+    salvarEstado();
+    toast('Reserva cancelada.');
+  }
+  document.getElementById('area-confirmacao').style.display = 'none';
+  document.getElementById('area-formulario').style.display = 'block';
+  document.getElementById('input-nome').value = '';
+  document.getElementById('input-turma').value = '';
+  renderSelecaoItens();
+  renderCantina();
 }
 
-/* ─── Toast ─────────────────────────────────────────────────────────── */
+// ── Render Cantina ─────────────────────────────
+function renderCantina() {
+  renderListaItens();
+  renderStats();
+  renderContagem();
+  renderFaturamento();
+  renderChamada();
+  renderPedidos();
 
-function toast(msg) {
-  var t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(function(){ t.classList.remove('show'); }, 2500);
+  // Preenche campos salvos
+  document.getElementById('cant-titulo').value = cardapio.titulo;
+  document.getElementById('cant-desc').value = cardapio.descricao;
+  document.getElementById('toggle-reservas').classList.toggle('on', cardapio.reservasAbertas);
+  document.getElementById('pix-tipo-select').value = pixConfig.tipo || '';
+  document.getElementById('pix-chave-input').value = pixConfig.chave || '';
 }
 
-/* ─── Init ───────────────────────────────────────────────────────────── */
+function renderStats() {
+  const ativos = pedidos.filter(p => p.status !== 'cancelado');
+  document.getElementById('stat-total').textContent = ativos.length;
+  document.getElementById('stat-aguardando').textContent = ativos.filter(p => p.status === 'aguardando').length;
+  document.getElementById('stat-entregue').textContent = ativos.filter(p => p.status === 'entregue').length;
+}
 
-carregar();
-renderAluno();
-setInterval(function(){
-  carregar();
-  if (document.getElementById('page-aluno').classList.contains('active')) renderAluno();
-  if (document.getElementById('page-cantina').classList.contains('active')) renderCantina();
-}, 10000);
+function renderContagem() {
+  const el = document.getElementById('card-contagem');
+  if (!cardapio.itens.length) {
+    el.innerHTML = '<div style="font-size:0.85rem;color:var(--cinza-texto);padding:0.25rem 0">Sem itens no cardápio.</div>';
+    return;
+  }
+
+  const vendidos = {};
+  pedidos.filter(p => p.status !== 'cancelado').forEach(p => {
+    p.itens.forEach(i => { vendidos[i.id] = (vendidos[i.id] || 0) + i.qtd; });
+  });
+
+  el.innerHTML = cardapio.itens.map(item => {
+    const qtdVendida = vendidos[item.id] || 0;
+    const max = item.estoque !== null ? item.estoque : Math.max(qtdVendida, 10);
+    const pct = max > 0 ? Math.min(100, (qtdVendida / max) * 100) : 0;
+    const restante = item.estoque !== null ? item.estoque - qtdVendida : null;
+    const barClass = restante !== null && restante <= 0 ? 'esgotado' : restante !== null && restante <= 3 ? 'baixo' : '';
+    const estoqueLabel = restante === null ? '∞' : `${restante} restante${restante !== 1 ? 's' : ''}`;
+
+    return `<div class="contagem-item">
+      <span class="contagem-nome">${item.nome}</span>
+      <div class="barra-wrap"><div class="barra-fill ${barClass}" style="width:${pct}%"></div></div>
+      <span class="contagem-num">${qtdVendida}</span>
+      <span class="contagem-estoque">${estoqueLabel}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderFaturamento() {
+  const el = document.getElementById('card-faturamento');
+  const ativos = pedidos.filter(p => p.status !== 'cancelado' && p.total > 0);
+  if (!ativos.length) {
+    el.innerHTML = '<div style="font-size:0.85rem;color:var(--cinza-texto)">Sem dados ainda.</div>';
+    return;
+  }
+
+  const totalGeral = ativos.reduce((a, p) => a + p.total, 0);
+  const porForma = {};
+  ativos.forEach(p => {
+    const f = p.formaPagamento || 'pix';
+    porForma[f] = (porForma[f] || 0) + p.total;
+  });
+
+  const labels = { pix: '💸 PIX', cartao: '💳 Cartão', dinheiro: '💵 Dinheiro' };
+
+  el.innerHTML = Object.entries(porForma).map(([f, v]) =>
+    `<div class="faturamento-row"><span>${labels[f] || f}</span><span>R$ ${v.toFixed(2)}</span></div>`
+  ).join('') +
+  `<div class="faturamento-total"><span>Total</span><span>R$ ${totalGeral.toFixed(2)}</span></div>`;
+}
+
+function renderChamada() {
+  const box = document.getElementById('box-chamada');
+  if (!ultimaSenhaChamada) {
+    box.className = 'chamada-box chamada-vazia';
+    box.innerHTML = '<div style="width:100%">Nenhuma senha chamada ainda</div>';
+    return;
+  }
+  const p = pedidos.find(x => x.senha === ultimaSenhaChamada && x.status !== 'cancelado');
+  if (!p) return;
+  const icones = { pix: '💸', cartao: '💳', dinheiro: '💵' };
+  const statusPag = p.formaPagamento === 'pix' ? (p.pago ? '✅ PIX confirmado' : '⚠️ Aguardando PIX') : `${icones[p.formaPagamento] || ''} Pagar na retirada`;
+
+  box.className = 'chamada-box';
+  box.innerHTML = `
+    <div>
+      <div class="chamada-label">Senha chamada</div>
+      <div class="chamada-senha">${String(p.senha).padStart(2,'0')}</div>
+    </div>
+    <div style="flex:1">
+      <div class="chamada-nome">${p.nome} · ${p.turma}</div>
+      <div class="chamada-itens">${p.itens.map(i=>i.nome).join(', ')}</div>
+      <div style="font-size:0.75rem; margin-top:3px; opacity:0.85">${statusPag}</div>
+    </div>
+    <div>
+      <button class="btn btn-laranja btn-sm" onclick="confirmarEntrega(${p.senha})">Entregar</button>
+    </div>`;
+}
+
+function chamarProxima() {
+  const aguardando = pedidos.filter(p => p.status === 'aguardando').sort((a, b) => a.senha - b.senha);
+  if (!aguardando.length) { toast('Nenhum pedido aguardando.'); return; }
+  ultimaSenhaChamada = aguardando[0].senha;
+  renderChamada();
+}
+
+function confirmarEntrega(senha) {
+  const p = pedidos.find(x => x.senha === senha);
+  if (!p) return;
+
+  // Se pagamento for PIX e não foi confirmado, perguntar
+  if (p.formaPagamento === 'pix' && !p.pago) {
+    if (!confirm(`O pagamento PIX de ${p.nome} foi confirmado?\n\nSenha: ${String(p.senha).padStart(2,'0')}\nTotal: R$ ${p.total.toFixed(2)}`)) {
+      toast('Confirme o PIX antes de entregar.');
+      return;
+    }
+    p.pago = true;
+  }
+
+  p.status = 'entregue';
+  salvarEstado();
+  toast(`Senha ${String(senha).padStart(2,'0')} entregue!`);
+  ultimaSenhaChamada = null;
+  renderCantina();
+}
+
+function confirmarPagamentoPix(senha) {
+  const p = pedidos.find(x => x.senha === senha);
+  if (!p) return;
+  p.pago = true;
+  salvarEstado();
+  toast(`PIX confirmado para senha ${String(senha).padStart(2,'0')}!`);
+  renderPedidos();
+  renderChamada();
+}
+
+function renderPedidos() {
+  const el = document.getElementById('lista-pedidos');
+  let lista = pedidos.filter(p => p.status !== 'cancelado');
+
+  if (filtroAtivo === 'aguardando') lista = lista.filter(p => p.status === 'aguardando');
+  if (filtroAtivo === 'entregue') lista = lista.filter(p => p.status === 'entregue');
+
+  if (!lista.length) {
+    el.innerHTML = '<div class="lista-vazia"><div class="ico">🍽</div>Nenhum pedido ainda.</div>';
+    return;
+  }
+
+  const icones = { pix: '💸', cartao: '💳', dinheiro: '💵' };
+
+  el.innerHTML = lista.sort((a,b) => a.senha - b.senha).map(p => {
+    const senhaClass = p.status === 'entregue' ? 'pedido-senha entregue' : 'pedido-senha';
+    const statusPag = p.formaPagamento === 'pix'
+      ? (p.pago
+        ? `<span style="color:var(--verde);font-size:0.72rem;font-weight:600">✅ PIX confirmado</span>`
+        : `<span style="color:var(--laranja);font-size:0.72rem;font-weight:600">⚠️ PIX pendente
+            <button class="btn-sm btn" style="margin-left:6px;padding:2px 8px;font-size:0.7rem;background:var(--verde);color:#fff;border-radius:6px;border:none;cursor:pointer" onclick="confirmarPagamentoPix(${p.senha})">Confirmar PIX</button>
+          </span>`)
+      : `<span style="color:var(--cinza-texto);font-size:0.72rem">${icones[p.formaPagamento]||''} Pagar na retirada</span>`;
+
+    const btnAcao = p.status === 'aguardando'
+      ? `<button class="btn btn-laranja btn-sm" onclick="confirmarEntrega(${p.senha})">Entregar</button>`
+      : `<span class="pill-status pill-encerrado" style="font-size:0.72rem">Entregue</span>`;
+
+    return `<div class="pedido-item">
+      <div class="${senhaClass}">${String(p.senha).padStart(2,'0')}</div>
+      <div class="pedido-info">
+        <div class="pedido-nome">${p.nome}</div>
+        <div class="pedido-turma">${p.turma} · ${p.hora}</div>
+        <div class="pedido-itens">${p.itens.map(i=>i.nome).join(', ')}</div>
+        <div style="margin-top:3px">${statusPag}</div>
+        ${p.total > 0 ? `<div class="pedido-total">R$ ${p.total.toFixed(2)}</div>` : ''}
+      </div>
+      <div>${btnAcao}</div>
+    </div>`;
+  }).join('');
+}
+
+function filtrar(tipo, btn) {
+  filtroAtivo = tipo;
+  document.querySelectorAll('.filtro-row .chip').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  renderPedidos();
+}
+
+// ── Init ───────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  carregarEstado();
+  renderAluno();
+
+  // Injetar botão de tema na nav
+  const nav = document.querySelector('nav');
+  const temaBtn = document.createElement('button');
+  temaBtn.id = 'btn-tema';
+  temaBtn.className = 'nav-tab';
+  temaBtn.textContent = temaAtual === 'escuro' ? '☀️' : '🌙';
+  temaBtn.title = 'Alternar tema';
+  temaBtn.onclick = toggleTema;
+  nav.appendChild(temaBtn);
+});

@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cantina Escolar</title>
+<title>Cantina do Lindaura</title>
 <link rel="stylesheet" href="cantina.css">
 </head>
 <body>
 
 <nav>
-  <div class="logo">Cantina <span>/ Escola</span></div>
+  <div class="logo">Cantina <span>/ Lindaura</span></div>
   <div class="nav-tabs">
     <button class="nav-tab active" onclick="irPara('aluno',this)">Sou aluno</button>
     <button class="nav-tab" onclick="irPara('cantina',this)">Cantina</button>
@@ -56,8 +56,41 @@
             <option>Professores e Staff</option>
           </select>
         </div>
+
         <div class="secao-titulo">O que você vai querer?</div>
         <div id="lista-selecao-itens"></div>
+
+        <!-- Forma de pagamento -->
+        <div class="secao-titulo" style="margin-top:1rem">Como vai pagar?</div>
+        <div class="pagamento-opcoes">
+          <label class="pagamento-opt">
+            <input type="radio" name="forma-pagamento" value="pix" checked>
+            <span class="pagamento-box">
+              <span class="pagamento-ico">💸</span>
+              <span class="pagamento-label">PIX</span>
+            </span>
+          </label>
+          <label class="pagamento-opt">
+            <input type="radio" name="forma-pagamento" value="cartao">
+            <span class="pagamento-box">
+              <span class="pagamento-ico">💳</span>
+              <span class="pagamento-label">Cartão</span>
+            </span>
+          </label>
+          <label class="pagamento-opt">
+            <input type="radio" name="forma-pagamento" value="dinheiro">
+            <span class="pagamento-box">
+              <span class="pagamento-ico">💵</span>
+              <span class="pagamento-label">Dinheiro</span>
+            </span>
+          </label>
+        </div>
+
+        <!-- Aviso PIX (aparece só quando PIX selecionado e há chave configurada) -->
+        <div id="aviso-pix-aluno" class="aviso" style="display:none; margin-top:0.75rem">
+          📱 Você precisará confirmar o pagamento PIX antes de retirar seu pedido.
+        </div>
+
         <div id="aviso-encerrado" class="aviso" style="display:none; margin-top:1rem">As reservas de hoje foram encerradas pela cantina.</div>
         <button class="btn btn-verde" style="margin-top:1rem" id="btn-reservar" onclick="fazerReserva()">Confirmar reserva</button>
       </div>
@@ -70,7 +103,7 @@
           <div style="font-size:1rem; font-weight:600; margin-bottom:4px">Reserva confirmada!</div>
           <div class="senha-label">Sua senha de retirada</div>
           <div class="numero-senha" id="senha-gerada">-</div>
-          <div class="senha-label">Quando a cantina chamar essa senha, venha buscar.</div>
+          <div class="senha-label">Aguarde a cantina chamar essa senha.</div>
           <div class="resumo-pedido" id="resumo-itens-aluno"></div>
           <div style="margin-top:1rem; background:var(--cinza-fundo); border-radius:var(--radius-sm); padding:0.75rem; font-size:0.82rem; color:var(--cinza-texto)">
             Não precisa ficar na fila — a cantina chamará as senhas em ordem!
@@ -80,11 +113,11 @@
       </div>
     </div>
 
-    <!-- Informação de Pagamento para o Aluno -->
+    <!-- Informação de Pagamento PIX para o Aluno -->
     <div id="pix-info-aluno" class="card" style="display:none">
-      <div class="secao-titulo" style="margin-top:0">💳 Pagamento</div>
+      <div class="secao-titulo" style="margin-top:0">💳 Pagamento via PIX</div>
       <div style="font-size:0.82rem; color:var(--cinza-texto); margin-bottom:0.75rem">
-        Efetue o pagamento via PIX antes de retirar seu pedido:
+        Efetue o pagamento antes de retirar seu pedido:
       </div>
       <div class="pix-display">
         <div style="font-size:1.5rem">💸</div>
@@ -109,7 +142,7 @@
     <div style="font-weight:700; margin-bottom:0.25rem">Acesso da cantina</div>
     <div style="font-size:0.85rem; color:var(--cinza-texto); margin-bottom:1.25rem">Digite a senha para continuar</div>
     <div class="form-group" style="max-width:200px; margin:0 auto 1rem">
-      <input type="text" id="input-pin" placeholder="Senha" style="text-align:center; font-size:1.1rem; letter-spacing:4px">
+      <input type="password" id="input-pin" placeholder="Senha" style="text-align:center; font-size:1.1rem; letter-spacing:4px" onkeydown="if(event.key==='Enter')entrarCantina()">
     </div>
     <button class="btn btn-verde" style="max-width:200px; margin:0 auto" onclick="entrarCantina()">Entrar</button>
     <div style="font-size:0.75rem; color:var(--cinza-texto); margin-top:1rem">Senha padrão: <strong>1234</strong></div>
@@ -182,13 +215,13 @@
     <div class="secao-titulo">Pagamento</div>
     <div class="card">
       <div style="font-size:0.85rem; color:var(--cinza-texto); margin-bottom:0.85rem">
-        Configure a chave de recebimento que será exibida para os alunos.
+        Configure a chave PIX de recebimento (exibida para alunos). Cartão e dinheiro são recebidos na cantina.
       </div>
       <div class="config-pix-row">
         <div class="form-group" style="margin-bottom:0">
-          <label>Tipo de chave</label>
+          <label>Tipo de chave PIX</label>
           <select id="pix-tipo-select">
-            <option value="">Sem pagamento online</option>
+            <option value="">Sem PIX</option>
             <option value="cpf">CPF</option>
             <option value="cnpj">CNPJ</option>
             <option value="email">E-mail</option>
@@ -248,5 +281,16 @@
 <div id="toast"></div>
 
 <script src="cantina.js"></script>
+<script>
+  // Atualiza aviso PIX ao mudar forma de pagamento
+  document.addEventListener('change', function(e) {
+    if (e.target.name === 'forma-pagamento') {
+      const aviso = document.getElementById('aviso-pix-aluno');
+      const pixCard = document.getElementById('pix-info-aluno');
+      const temPix = pixCard && pixCard.style.display !== 'none';
+      if (aviso) aviso.style.display = (e.target.value === 'pix' && temPix) ? 'block' : 'none';
+    }
+  });
+</script>
 </body>
 </html>
